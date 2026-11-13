@@ -1,100 +1,77 @@
-📚 Coca-Cola 10-K Retrieval & Evaluation Pipeline
+# Coca-Cola 10-K Retrieval and Evaluation
 
-A production-style semantic retrieval pipeline for U.S. SEC EDGAR 10-K filings, built using LlamaIndex and open-source embeddings, with explicit retrieval evaluation and no reliance on proprietary large language models.
+**Semantic search over ten years of Coca-Cola's SEC 10-K filings (2015–2024) with open-source embeddings and a cross-encoder reranker, and no LLM in the retrieval path, so every result is deterministic and auditable.**
 
-This project demonstrates document ingestion, chunking, vector indexing, semantic retrieval, reranking, and quantitative evaluation on real-world financial disclosures using Coca-Cola as a case study.
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/dojedaro/coca-cola-10k-retrieval-evaluation/blob/main/coca_cola_10k_retrieval_pipeline.ipynb)
+[![Notebook checks](https://github.com/dojedaro/coca-cola-10k-retrieval-evaluation/actions/workflows/notebooks.yml/badge.svg)](https://github.com/dojedaro/coca-cola-10k-retrieval-evaluation/actions/workflows/notebooks.yml)
 
-🎯 Project Objectives
+> Part of a series of RAG projects: [strict PDF QA](https://github.com/dojedaro/strict-pdf-question-answering) ·
+> [PDF RAG + ReAct agent](https://github.com/dojedaro/pdf-rag-react-agent-langchain) ·
+> [policy QA with evaluation](https://github.com/dojedaro/openai-rag-policy-qa-evaluation) ·
+> **10-K retrieval evaluation** ·
+> [research-paper RAG](https://github.com/dojedaro/research-paper-rag-qa-system)
 
-Ingest and parse SEC EDGAR 10-K filings (2015–2024)
+## Results
 
-Convert long financial documents into searchable semantic chunks
+10 annual filings were fetched from SEC EDGAR, cleaned and split into **1,153 chunks**
+(2,000 characters, 200 overlap). Retrieval uses `bge-small-en-v1.5` embeddings, top 4.
 
-Build vector-based retrieval using open-source embedding models
+| Query | Precision@3 |
+|---|---|
+| What are Coca-Cola's main business segments? | 1.00 |
+| How does Coca-Cola make money? | 1.00 |
+| Who is Coca-Cola's Chief Information Officer? | **0.00** |
+| **Average** | **0.67** |
 
-Compare standard chunk retrieval vs sentence-window retrieval
+**What this does and doesn't show.** Three queries is a smoke test, not a benchmark. A chunk counts
+as relevant if it contains the query's expected keywords, which is a rough proxy for relevance. And
+the scores above come from the embedding retriever alone; the cross-encoder reranker is demonstrated
+in the notebook but wasn't scored. The useful finding is the failure: **a question about one named
+person scores 0**. Dense embeddings capture topics ("business segments") far better than specific
+entities and titles, which is the classic case for adding keyword (BM25) search alongside them.
 
-Apply cross-encoder reranking for relevance refinement
+## How it works
 
-Quantitatively evaluate retrieval quality using Precision@K
+```mermaid
+flowchart LR
+    E[SEC EDGAR<br/>Submissions API] --> H[10-K HTML<br/>2015-2024]
+    H --> C[Clean text, chunk<br/>2,000 chars, 200 overlap<br/>+ year and accession metadata]
+    C --> I[Vector index<br/>LlamaIndex + bge-small]
+    C --> W[Sentence-window index<br/>window of 3 sentences]
+    I --> R[Top-4 retrieval]
+    R --> X[Cross-encoder rerank<br/>ms-marco-MiniLM-L-6]
+    R --> P[Precision@3<br/>keyword relevance]
+```
 
-🏗️ System Architecture
+- **Ingestion:** filing metadata from the SEC Submissions API, then the official 10-K HTML, cleaned
+  with BeautifulSoup. Each chunk keeps its fiscal year, accession number and filing date.
+- **Two index types:** fixed-size chunks, and sentence-window nodes that retrieve one sentence but
+  return its neighbours as context.
+- **Retrieval only:** LlamaIndex runs with `llm=None`, so nothing is generated and every answer is a
+  quoted passage.
 
-EDGAR Ingestion
+## Run it
 
-Fetch filing metadata via the SEC Submissions API
+```bash
+pip install -r requirements.txt
+jupyter notebook coca_cola_10k_retrieval_pipeline.ipynb
+```
 
-Retrieve official 10-K HTML filings
+SEC EDGAR requires a `User-Agent` header that identifies you (name and email). Set it in the
+ingestion cell before running. No API keys are needed; the models run on CPU.
 
-Clean and normalize raw financial text
+## Stack
 
-Chunking Strategy
+Python, LlamaIndex, sentence-transformers (all-MiniLM-L6-v2, bge-small-en-v1.5), cross-encoder
+reranking, BeautifulSoup, SEC EDGAR API.
 
-Fixed-size overlapping text chunks
+## Limitations and next steps
 
-Metadata preserved (year, accession number, filing date)
+- Build a labeled set of 30+ questions with known answer passages, and report Precision@k, Recall@k
+  and MRR for each configuration: chunks vs. sentence windows, with and without the reranker.
+- Add BM25 and hybrid retrieval, which should fix the entity questions dense search misses.
+- Filter by fiscal year from the metadata, so "2019 revenue" can't retrieve a 2023 passage.
 
-Optional sentence-window nodes for finer-grained retrieval
+## License
 
-Embedding & Indexing
-
-HuggingFace sentence embeddings (MiniLM / BGE)
-
-CPU-friendly and fully open-source
-
-Vector index constructed with LlamaIndex
-
-Retrieval & Reranking
-
-Top-K semantic retrieval
-
-Cross-encoder reranking using a MiniLM-based model
-
-Retrieval logic runs with LLMs explicitly disabled
-
-Evaluation
-
-Precision@K on a manually curated financial query set
-
-Clear exposure of both strengths and failure cases
-
-🧠 Models & Tools Used
-
-Framework: LlamaIndex (v0.10.x)
-
-Embeddings:
-
-sentence-transformers/all-MiniLM-L6-v2
-
-BAAI/bge-small-en-v1.5
-
-Reranker:
-
-cross-encoder/ms-marco-MiniLM-L-6-v2
-
-Parsing & Ingestion:
-
-BeautifulSoup
-
-SEC EDGAR Submissions API
-
-Evaluation Metric:
-
-Precision@K
-
-🔒 LLM-based generation is intentionally excluded to ensure deterministic and auditable retrieval behavior.
-
-📊 Example Evaluation Results
-Query Type	Precision@3
-Business Segments	1.00
-Revenue Model	1.00
-Executive Roles	0.00
-Average Precision@3	0.67
-
-These results illustrate:
-
-Strong retrieval performance for business structure and revenue questions
-
-Known limitations for entity-specific executive roles
-
-The importance of explicit evaluation in retrieval systems
+MIT
