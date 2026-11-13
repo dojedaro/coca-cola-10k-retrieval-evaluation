@@ -1,0 +1,12 @@
+# Packages the notebook imports or installs. Versions were not recorded when it was run;
+# pin them (pip freeze) after a successful run to make it fully reproducible.
+beautifulsoup4
+langchain-community
+llama-index
+llama-index-embeddings-huggingface
+lxml
+nest-asyncio
+pdfplumber
+PyMuPDF
+requests
+sentence-transformers
